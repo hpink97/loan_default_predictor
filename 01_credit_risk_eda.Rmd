@@ -233,7 +233,7 @@ df[,cols2replace] <- lapply(df[,cols2replace] , function(x) ifelse(is.na(x), 0, 
 info <- get_dataset_overview(df) 
 
 
-
+write_rds(df, 'data/all_data_merged.rds.gz',compress = 'gz')
 
 
 ```
@@ -292,7 +292,7 @@ binomial_glm_df <- binomial_glm_df %>%
   mutate(abs_coef = abs(coefficient), 
          p_adjust = p.adjust(p_value, method = 'bonferroni'),
          minus_log10_padj = -log10(p_adjust+1e-200)) %>% 
-  arrange(deviance_reduction)
+  arrange(-deviance_reduction)
 ```
 
 
@@ -313,24 +313,15 @@ Keep only numeric columns that reduced the residual deviance of the fitted model
 ```{r}
 numeric_columns_to_keep <- filter(binomial_glm_df, deviance_reduction >0.0015)$feature
 
-numeric_data2 <- numeric_data[,numeric_columns_to_keep]
-
 print(paste('Keeping', length(numeric_columns_to_keep), 
             'numeric features out of the original',
             length(numeric_columns)))
 ```
 
-```{r}
-feature <- 'max_mth_drawings'
-df_to_plot <- df[,c('target',feature)]
-colnames(df_to_plot)[colnames(df_to_plot)==feature] <- 'feature_to_plot'
-
-
-ggplot(df_to_plot, aes(feature_to_plot, fill = target, colour = target)) +
-  geom_density(alpha = 0.25)+
-  labs(x=feature,y='Density')+
-  scale_color_manual(values = c('0' = 'green', '1' = 'red'))+
-  scale_fill_manual(values = c('0' = 'green', '1' = 'red'))+xlim(c(0,1e5))
+```{r warning=FALSE}
+for(x in numeric_columns_to_keep[1:20]){
+  plot_numeric_variable(feature = x, df=df)
+}
 
 ```
 
@@ -389,16 +380,29 @@ chi_sq_df
 
 ```
 
+```{r}
+chi_sq_df <- chi_sq_df %>% 
+  mutate(minus_log10_padj =-log10(p_adjust+1e-200), 
+         remove_feature = ifelse(min_max_diff<0.03 & p_adjust >1e-10,TRUE,FALSE)) 
+
+ggplot(chi_sq_df, aes(x=min_max_diff, y=minus_log10_padj, col=remove_feature ))+
+  geom_point()+
+  labs(x='Maxium category difference in Loan Default Proportion', 
+       y = 'Chi-squared -log10(p-adjust)')
+```
 
 
 ```{r fig.width=12, fig.height=6}
-for(x in chi_sq_df$feature[1:25]){
+categ_cols_to_keep <- chi_sq_df$feature[!chi_sq_df$remove_feature]
+
+for(x in categ_cols_to_keep){
   plot_categorical_variable(x)
 }
 ```
 
 ```{r}
-numeric_data3 <- VIM::kNN(numeric_data2)
-
+final_data <- df[,c('target','sk_id_curr', numeric_columns_to_keep, categ_cols_to_keep)]
+get_dataset_overview(final_data) %>% filter(Perc_missing >0)
+write_rds(final_data, 'data/clean_feature_selected_data.rds.gz',compress = 'gz')
 ```
 
