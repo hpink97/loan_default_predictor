@@ -1,0 +1,498 @@
+---
+title: "01_credit_risk_eda"
+author: "HJ Pink"
+date: "2023-05-20"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Credit Risk - merge and combine datasets
+
+<https://www.kaggle.com/competitions/home-credit-default-risk/data>
+
+## Business Problem
+
+Home Credit Group addresses the challenge of limited access to loans for individuals with insufficient credit histories. Many people face difficulties in obtaining loans, which makes them vulnerable to unreliable lenders. Home Credit strives to provide a positive and secure borrowing experience for this underserved population. They leverage alternative data sources, such as telco and transactional information, to assess clients' repayment abilities.
+
+By utilizing statistical and machine learning techniques, Home Credit aims to unlock the full potential of their data and make accurate predictions. Their goal is to ensure that deserving individuals are not denied loans and to provide them with suitable loan terms and repayment schedules. Through this approach, Home Credit contributes to greater financial inclusion and empowers clients to achieve financial success.
+
+### Load libraries
+
+```{r message=FALSE, warning=FALSE}
+library(readr)
+library(dplyr)
+library(tidyr)
+library(magrittr)
+library(DT)
+
+##import helper functions
+source('helper_functions.R')
+```
+
+## Import Data
+
+This dataset contains a relational schema of several tables. `application_{train|test}.csv` contains main information regarding the credit application including a primary key (`sk_id_curr`). Applications contains 1 row per `sk_id_curr`. However other available datasets require aggreagtion before merging, including; bank balances, previous credit applications, etc contain information regarding previous loans (successful and unsuccessful), credit card spending, repayment history, etc
+
+### Application data
+
+Import `application_train.csv`, this is the main table which contains data regarding the credit application including the **target variable - whether or not the loan defaulted**.
+
+Create additional features such as income ratios and discretise continuous features into binary (does applicant have children).
+
+```{r}
+applications <- clean_read_csv('data/application_train.csv') %>%
+  mutate(
+    #convert days_birth to age
+    age = abs(days_birth)/365.25,
+    age_group = cut(age, 
+                    breaks = c(0, 30, 45, 60, Inf),
+                    labels = c("under 30", "30-45", "45-60", "60+"),
+                    include.lowest = TRUE) %>% factor(),
+    yrs_employed = abs(days_employed)/365.25,
+    yrs_employed = ifelse(yrs_employed > age,
+                           age*median(yrs_employed/age), 
+                           yrs_employed),
+    # Calculate the credit-to-income ratio
+    credit_income_ratio = amt_credit / amt_income_total,
+    # Calculate the annuity-to-income ratio
+    annuity_income_ratio = amt_annuity / amt_income_total,
+    # Calculate income per family member
+    income_per_family_member = amt_income_total / cnt_fam_members, 
+    # Calculate the percentage of adult life employed
+    perc_adult_life_employed = yrs_employed / (age-16),
+    # Clean and factorize the organization type column
+    organization_type = organization_type %>% 
+      gsub('Type \\d{1,2}|: type \\d{1,2}', '', .) %>% 
+      trimws() %>% factor(),
+    # Create a binary variable for childless applicants
+    is_childless = ifelse(cnt_children == 0, 1, 0) %>% factor()
+  ) %>% 
+  select(-days_employed, -days_birth)
+
+dt_datatable_wrapper(applications)
+```
+
+### Bureau data
+
+Import data credit bureau regarding the previous loans including amount credit available to each application, amount of debt to be re-payed, whether payments were made late.
+
+```{r}
+
+#C means closed, X means status unknown, 0 means no DPD, 1 means maximal did during month between 1-30, 2 means DPD 31-60,… 5 means DPD 120+ or sold or written off ]
+bureau_balance <- clean_read_csv('data/bureau_balance.csv')
+balance_status_to_numeric <- c(
+  'C' = 0,'X' = 0, '0' = 0, '1' = 1, '2' = 2, '3' = 3, '4' = 4, '5' = 5
+)
+bureau_balance$status_numeric <- plyr::mapvalues(bureau_balance$status,
+                                           from = names(balance_status_to_numeric),
+                                           to = balance_status_to_numeric) %>%
+  as.numeric()
+
+bureau_balance$months_balance <- abs(bureau_balance$months_balance)
+bureau_balance$weighted_status <- bureau_balance$status_numeric/(bureau_balance$months_balance+1)
+
+
+
+
+previous_credits <- clean_read_csv('data/bureau.csv') %>%
+  # Replace NA values with zeros to avoid issues with ratios
+  replace_na(list(
+    amt_credit_sum = 0, 
+    amt_credit_sum_debt = 0,
+    amt_credit_sum_overdue = 0,
+    credit_day_overdue = 0, 
+    amt_annuity = 0
+  )) %>%
+  mutate(
+    # Calculate days since credit update
+    days_since_credit_update = -days_credit_update,
+    # Calculate the debt-to-credit ratio
+    debt_to_credit_ratio = ifelse(amt_credit_sum == 0, 0, amt_credit_sum_debt / amt_credit_sum),
+    # Calculate the overdue-to-credit ratio
+    overdue_to_credit_ratio = ifelse(amt_credit_sum == 0, 0, amt_credit_sum_overdue / amt_credit_sum)
+  )
+
+dt_datatable_wrapper(previous_credits)
+
+```
+
+### Credit card data
+
+The credit_card_balance.csv dataset contains information about monthly credit card balances for previous credits in Home Credit. It includes data such as the ID of previous credits, loan IDs, months of balance relative to the application date, balance amounts, credit card limits, amounts drawn, payment information, receivables, installment counts, contract statuses, and days past due.
+
+The dataset provides insights into the credit card usage and payment behaviour of borrowers. It can be used to analyse trends in credit card balances, identify default patterns, and assess the creditworthiness of borrowers.
+
+```{r}
+credit_card_balances <- clean_read_csv('data/credit_card_balance.csv') %>%
+  # Replace NAs with zero
+  replace_na(list(
+    amt_drawings_atm_current = 0, 
+    amt_drawings_current = 0,
+    amt_drawings_other_current = 0, 
+    amt_drawings_pos_current = 0
+  )) %>% 
+  # Calculate the total drawings
+  mutate(
+    total_drawings = amt_drawings_atm_current + 
+                     amt_drawings_current + 
+                     amt_drawings_other_current + 
+                     amt_drawings_pos_current,
+    # Create a binary variable for delayed payments
+    dpd_delayed = ifelse(sk_dpd > 0, 1, 0), 
+    months_balance = abs(months_balance)
+  )
+
+
+dt_datatable_wrapper(credit_card_balances)
+```
+
+### Installment payment data
+
+The `installments_payments.csv` dataset contains data on instalment payments for previous credits in Home Credit. It includes information such as previous credit IDs, loan IDs, instalment versions, numbers, due and payment days, prescribed and actual payment amounts. The dataset helps track payment behaviors, assess repayment patterns, and evaluate creditworthiness. It provides insights into borrowers' payment discipline and fulfilment of instalment obligations. This information is valuable for analyzing payment trends, predicting default risks, and optimizing loan management.
+
+```{r}
+installments_payments <- clean_read_csv('data/installments_payments.csv') %>% 
+  ##replace NAs with zeros
+  replace_na(list(days_entry_payment =0, amt_payment =0)) %>% 
+  ##calculate new features based on existing data 
+  mutate(
+    amt_instalment = ifelse(amt_instalment==0, 0.1, amt_instalment),
+    #when was the instalment paid relative to due date
+    days_before_deadline =days_instalment-days_entry_payment,
+    #binary feature for if instalment payment was late
+    is_late = ifelse(days_before_deadline <0, 1, 0), 
+    #how much of instalment value was paid
+    perc_install_paid = amt_payment/amt_instalment, 
+    #binary for if instalment wasn't fully paid
+    is_underpaid = ifelse(perc_install_paid <1, 1,0 )
+  )
+  
+dt_datatable_wrapper(installments_payments)
+
+```
+
+### Previous credit application data
+
+The `previous_application.csv` dataset contains information about previous loan applications in Home Credit. It includes data such as IDs of previous credits and loans, contract details, payment amounts, application timing, flags indicating the last application per contract or day, interest rates, loan purposes, decision days, payment methods, rejection reasons, client types, goods categories, portfolio and product types, channel types, seller details, payment terms, and insurance requests. This dataset provides valuable insights into loan application patterns, client preferences, and application outcomes. It can be utilized for risk assessment, customer segmentation, and improving loan application processes.
+
+```{r}
+previous_applications <- clean_read_csv('data/previous_application.csv') %>% 
+  mutate(is_downpayment = ifelse(!is.na(amt_down_payment) & amt_down_payment>0, 
+                                 1,0))
+
+##filter based on success of application
+
+accepted_applications <- filter(previous_applications, 
+                                name_contract_status %in% c('Approved','Unused offer'))
+
+rejected_applications <- filter(previous_applications, 
+                                name_contract_status %in% c('Refused','Canceled'))
+
+dt_datatable_wrapper(rejected_applications)
+
+```
+
+## Data Aggregation
+
+Calculate aggregated statistics on `previous_credits`, `installments_payments`, `credit_card_balances` and `previous_applications` at the loan applicant level (`sk_id_curr`).
+
+### Previous Credit Aggregation
+
+```{r}
+bureau_balance_agg <- bureau_balance %>% 
+  dplyr::group_by(sk_id_bureau) %>% 
+  summarise(
+    median_balance_status = median(status_numeric, na.rm=TRUE),
+    max_balance_status = max(status_numeric, na.rm=TRUE),
+    median_weighted_status = median(weighted_status, na.rm=TRUE),
+    max_weighted_status = max(weighted_status, na.rm=TRUE)
+  )
+
+rm(bureau_balance)
+```
+
+
+```{r}
+
+bureau_merged <- merge(
+  previous_credits ,bureau_balance_agg, 
+  by='sk_id_bureau',all.x=TRUE 
+)
+
+previous_credits_agg <- bureau_merged %>%
+  mutate(days_since_credit_update = abs(days_since_credit_update),
+         days_credit = abs(days_credit),
+         days_credit_enddate = abs(days_credit_enddate)) %>% 
+  group_by(sk_id_curr) %>%
+  summarise(
+    #do they have car loan
+    count_loan_types = n_distinct(credit_type),
+    # Calculate the total sum of credit amounts
+    total_credit_sum = sum(amt_credit_sum, na.rm = TRUE),
+    # Calculate the total sum of credit debts
+    total_credit_debt = sum(amt_credit_sum_debt, na.rm = TRUE),
+    # Calculate the total sum of coverdue credit
+    total_credit_overdue = sum(amt_credit_sum_overdue, na.rm = TRUE),
+    total_credit_max_overdue = sum(amt_credit_max_overdue, na.rm=TRUE),
+    # Calculate the total sum of days overdue
+    total_days_overdue = sum(credit_day_overdue, na.rm = TRUE),
+    # Calculate the total sum of annuities
+    total_annuity = sum(amt_annuity, na.rm = TRUE),
+    # Count the number of active credits
+    count_active_credits = sum(credit_active == 'Active'),
+    # Count the number of closed credits
+    count_closed_credits = sum(credit_active == 'Closed'),
+    # Find the minimum debt-to-credit (credit utilisation) ratio
+    min_debt_to_credit_ratio = min(debt_to_credit_ratio, na.rm = TRUE),
+    # Find the maximum debt-to-credit (credit utilisation) ratio
+    max_debt_to_credit_ratio = max(debt_to_credit_ratio, na.rm = TRUE),
+    # Find the maximum overdue-to-credit ratio
+    max_overdue_to_credit_ratio = max(overdue_to_credit_ratio, na.rm = TRUE),
+    # Calculate the average days since credit update
+    avg_days_since_credit_update = median(days_since_credit_update, na.rm = TRUE),
+    ## fewest days since update 
+    min_days_since_credit_update = min(days_since_credit_update, na.rm = TRUE),
+    credit_duration = sum(days_credit-days_credit_enddate,na.rm=TRUE) ) %>% 
+  mutate(
+    # Calculate the overall credit-to-annuity ratio
+    credit_to_annuity_ratio = ifelse(total_annuity == 0, 0, 
+                                     total_credit_sum / total_annuity),
+    # Calculate overall the debt-to-credit ratio
+    debt_to_credit_ratio = ifelse(total_credit_sum == 0, 0, 
+                                  total_credit_debt / total_credit_sum),
+    # Calculate the overall overdue-to-credit ratio
+    overdue_to_credit_ratio = ifelse(total_credit_sum == 0, 0, 
+                                     total_credit_overdue / total_credit_sum)
+  )
+
+dt_datatable_wrapper(previous_credits_agg)
+
+```
+
+### Credit card balance aggregation
+
+```{r}
+# Aggregate credit card balances data
+credit_data_agg <- credit_card_balances %>%
+  mutate(weighting_month = abs(months_balance)+1) %>% 
+  group_by(sk_id_curr) %>%
+  summarise(
+    # Calculate the number of months with balances
+    n_months_balances = n(),
+    # Calculate the mean balance
+    avg_balance = median(amt_balance, na.rm = TRUE),
+    mean_weighted_balanced = median(amt_balance/weighting_month),
+    # Calculate max balance 
+    max_balance = max(amt_balance, na.rm =TRUE), 
+    max_weighted_balance = max(amt_balance/weighting_month, na.rm = TRUE),
+    # Calculate the standard deviation of balance
+    sd_balance = sd(amt_balance, na.rm = TRUE),
+    # Calculate the maximum credit limit
+    max_credit_limit = max(amt_credit_limit_actual, na.rm = TRUE),
+    # Calculate the total sum of drawings
+    total_drawings_sum = sum(total_drawings, na.rm = TRUE),
+    total_weighted_drawings_sum = sum(total_drawings/weighting_month, na.rm=TRUE),
+    # Calculate the maximum monthly drawings
+    max_mth_drawings = max(total_drawings, na.rm = TRUE),
+    max_weighted_mth_drawings = max(total_drawings/weighting_month, na.rm=TRUE),
+    # Calculate the total sum of point-of-sale drawings
+    total_point_of_sale_drawings = sum(amt_drawings_pos_current, na.rm = TRUE),
+    total_weighted_point_of_sale_drawings = sum(amt_drawings_pos_current/weighting_month, 
+                                                na.rm = TRUE),
+    # Calculate total inst_min_regularity
+    toatl_inst_min_regularity = sum(amt_inst_min_regularity, na.rm = TRUE),
+    # Calculate average point of sale drawings
+    average_point_of_sale_drawings = median(amt_drawings_pos_current, na.rm = TRUE),
+    # Calculate the total sum of payments
+    total_payments_sum = sum(amt_payment_total_current, na.rm = TRUE),
+    total_weighted_payments_sum = sum(amt_payment_total_current/weighting_month, na.rm = TRUE),
+    # Calculate the total sum of payments
+    total_payments_max = max(amt_payment_total_current, na.rm = TRUE),
+    total_weighted_payments_max = sum(amt_payment_total_current/weighting_month, na.rm = TRUE),
+    # Calculate total receivable amount
+    total_receivable_sum = sum(amt_total_receivable, na.rm = TRUE),
+    total_weighted_receivable_sum = sum(amt_total_receivable/weighting_month, na.rm = TRUE),
+    # Calculate median receivable amount
+    avg_receivable_sum = median(amt_total_receivable, na.rm = TRUE),
+    avg_weighted_receivable_sum = median(amt_total_receivable/weighting_month, na.rm = TRUE),
+    # Calculate the maximum DPD (Days Past Due)
+    total_dpd = max(sk_dpd, na.rm = TRUE),
+    # Calculate the count of delayed payments
+    count_dpd_delayed = sum(dpd_delayed, na.rm = TRUE)
+  )
+
+dt_datatable_wrapper(credit_data_agg)
+
+```
+
+### Credit card monthly balance change stats
+
+```{r}
+# Filter for customers with multiple balances
+multiple_balances <- filter(credit_data_agg, n_months_balances > 2)$sk_id_curr 
+
+# Calculate monthly balance change
+mth_balance_change <- credit_card_balances %>%
+  filter(sk_id_curr %in% multiple_balances) %>% 
+  arrange(sk_id_curr, months_balance) %>%
+  group_by(sk_id_curr) %>%
+  mutate(balance_change = amt_balance - lag(amt_balance))
+
+# Calculate aggregate statistics of balance change
+balance_change_agg <- mth_balance_change %>%
+  ungroup() %>% 
+  group_by(sk_id_curr) %>%
+  summarise(
+    min_balance_change = min(balance_change, na.rm = TRUE),
+    max_balance_change = max(balance_change, na.rm = TRUE), 
+    median_balance_change = median(balance_change, na.rm = TRUE)
+  )
+
+# Clean up large variable to save memory
+rm(credit_card_balances)
+
+# Merge credit data aggregation with balance change aggregation
+credit_agg <- merge(credit_data_agg, balance_change_agg, 
+                    by = 'sk_id_curr', all.x = TRUE)
+
+dt_datatable_wrapper(balance_change_agg)
+
+```
+
+### Credit payment instalment aggregations
+
+```{r}
+# Aggregate installments payments data
+installments_agg <- installments_payments %>% 
+  group_by(sk_id_curr) %>% 
+  summarise(
+    # Calculate the number of installments
+    n_installments = n(),
+    # Calculate the number of late payments
+    n_late_payments = sum(is_late, na.rm = TRUE),
+    # Calculate the number of underpaid installments
+    n_underpaid = sum(is_underpaid, na.rm = TRUE),
+    # Calculate the total amount of installment
+    total_amt_instalment = sum(amt_instalment, na.rm = TRUE),
+    # Calculate the total amount of payment
+    total_amt_payment = sum(amt_payment, na.rm = TRUE),
+    # Calculate the median days before the deadline
+    median_days_before_deadline = median(days_before_deadline, na.rm = TRUE),
+    # Calculate the minimum days before the deadline
+    min_days_before_deadline = min(days_before_deadline, na.rm = TRUE),
+    # Calculate the minimum percentage of installment paid
+    min_perc_installment_paid = min(perc_install_paid, na.rm = TRUE)
+  ) %>% 
+  mutate(
+    # Calculate the percentage of late payments
+    perc_late = n_late_payments / n_installments,
+    # Calculate the percentage of underpaid installments
+    perc_underpaid = n_underpaid / n_installments, 
+    # Calculate the overall percentage paid
+    overall_perc_paid = total_amt_payment / total_amt_instalment
+  )
+
+head(installments_agg, 10) %>% datatable()
+
+
+```
+
+### Previous credit applications data aggregation
+
+```{r}
+# Count the total number of previous applications for each SK_ID_CURR
+total_applications <- count(previous_applications, sk_id_curr, name = 'total_num_previous_apps')
+
+# Aggregate accepted applications data
+accepted_agg <- accepted_applications %>% 
+  group_by(sk_id_curr) %>% 
+  summarise(
+    # Count the total number of accepted applications
+    total_accepted_apps = n(),  
+    # Calculate the sum of accepted credit amounts
+    total_accepted_credit = sum(amt_credit, na.rm = TRUE),  
+    # Calculate the mean downpayment rate for accepted applications
+    accepted_median_downpayment_rate = median(rate_down_payment, na.rm = TRUE),  
+    # Calculate the proportion of accepted applications with downpayment
+    accepted_prop_w_downpayment = sum(is_downpayment) / n(),  
+    # Find the most recent acceptance date
+    most_recent_accepted = max(days_decision, na.rm = FALSE),  
+    accepted_max_days_last_due = max(days_last_due, na.rm = FALSE),  
+    # Find the maximum days to the last due date for accepted applications
+    accepted_max_days_first_due = max(days_first_due, na.rm = FALSE)  
+  )
+
+# Aggregate rejected applications data
+rejected_agg <- rejected_applications %>% 
+  group_by(sk_id_curr) %>% 
+  summarise(
+     # Count the total number of rejected applications
+    total_rejected_apps = n(), 
+    # Calculate the sum of rejected credit amounts
+    total_rejected_credit = sum(amt_credit, na.rm = TRUE),  
+    # Calculate the mean downpayment rate for rejected applications
+    rejected_median_downpayment_rate = median(rate_down_payment, na.rm = TRUE),  
+    # Calculate the proportion of rejected applications with downpayment
+    rejected_prop_w_downpayment = sum(is_downpayment) / n(),  
+    # Find the most recent rejection date
+    most_recent_rejected = max(days_decision, na.rm = FALSE)  
+  )
+
+# Merge the aggregated data
+previous_applications_agg <- merge(total_applications, accepted_agg, 
+                                   by = 'sk_id_curr', all.x = TRUE) %>% 
+  merge(rejected_agg, by = 'sk_id_curr', all.x = TRUE) %>% 
+  mutate(
+    # Replace NA, NaN, and infinite values with 0
+    across(everything(), ~replace(., is.na(.) | is.nan(.) | is.infinite(.), 0)),
+    # Calculate the acceptance rate of previous applications
+    accepted_rate = total_accepted_apps / total_num_previous_apps,
+    # Calculate the proportion of credit rejected
+    prop_credit_rejected = total_rejected_credit / 
+      (total_rejected_credit + total_accepted_credit)
+  )
+  
+# Print the head of the aggregated statistics
+head(previous_applications_agg,10) %>% datatable()
+
+
+```
+
+## Merge datasets
+
+```{r}
+# Merge dataframes
+
+# Merge the 'applications' and 'previous_credits_agg' dataframes by 'sk_id_curr', keeping all rows from 'applications'
+df <- merge(applications, previous_credits_agg, by = 'sk_id_curr', all.x = TRUE) %>% 
+  merge(credit_agg, by = 'sk_id_curr', all.x = TRUE) %>% 
+  merge(installments_agg, by = 'sk_id_curr', all.x = TRUE) %>% 
+  merge(previous_applications_agg, by = 'sk_id_curr', all.x = TRUE)
+
+# Replace NAs in aggregated columns with zeros. In these datasets, NA means no data
+cols2replace <- c(colnames(credit_agg), 
+                  colnames(installments_agg),
+                  colnames(previous_credits_agg), 
+                  colnames(previous_applications_agg)) %>% unique()
+
+df[, cols2replace] <- lapply(df[, cols2replace], function(x) ifelse(is.na(x), 0, x))
+
+# Get dataset overview
+info <- get_dataset_overview(df)
+
+df %>% head(10) %>% datatable()
+
+```
+
+
+## Write dataset to local file
+
+```{r}
+# Write the merged dataframe to a compressed .rds file
+write_rds(df, 'data/all_data_merged.rds.gz', compress = 'gz')
+write.csv(df, 'data/all_data_merged.csv', row.names = FALSE)
+
+```

@@ -1,0 +1,254 @@
+---
+title: "02_credit_risk_eda"
+author: "HJ Pink"
+date: "2023-05-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Exploratory Data Analysis and Feature Selection
+
+## Load Libraries
+
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
+library(ggcorrplot)
+library(DT)
+
+#load helper function file including plotting functions
+source('helper_functions.R') 
+```
+
+## Import data
+
+Load .rds file saved last time
+
+```{r}
+df <- read_rds('data/all_data_merged.rds.gz')
+info <- get_dataset_overview(df)
+
+```
+
+## Correlation matrix of numeric columns
+
+```{r fig.width=15, fig.height=15}
+# Get the numeric column names from the dataset
+numeric_columns <- filter(info, Data_Type =='numeric')$Column
+
+numeric_data <- select(df, all_of(c('target',numeric_columns))) %>% mutate(target = as.numeric(target))
+
+##calculate correlation matrix
+corr_matrix <- cor(numeric_data, use = "pairwise.complete.obs")
+ggcorrplot(corr_matrix,
+           type = "lower",
+           hc.order = TRUE,
+           outline.col = "white")+
+  theme(legend.position = 'bottom',
+        axis.text.x = element_text(size = 6.5, angle = 90, hjust=1),
+        axis.text.y = element_text(size = 6.5))
+```
+
+## Logistic regression
+
+Perform **logistic regression** analysis on each numeric feature in a dataset to identify the features that are associated with loan default behavior.
+
+Logistic regression is a statistical model used for binary classification, and it helps determine the impact of each numeric feature on the likelihood of loan default.
+
+Here, we fit a single logistic regression model for each feature, using `glm(target~num_feature, family=binomial)`. From each model, several metrics are extracted to determine how well each feature;
+
+-   P-value: The probability that observed relationship with loan defaulting is entirely random
+
+-   Coefficient: It represents the direction and magnitude of the relationship between a feature and the likelihood of loan default. ***However, this metric is influenced by scale of numeric feature***
+
+-   AIC (Akaike Information Criterion): It evaluates the model's quality by considering both goodness of fit and model complexity. Lower AIC values indicate better model performance with a balanced trade-off between fit and complexity.
+
+-   Deviance Reduction: It measures the improvement in model fit when a feature is included in the logistic regression. Higher deviance reduction indicates that including the feature enhances the model's ability to explain loan default behaviour.
+
+```{r warning=FALSE}
+# Create an empty dataframe to store the results
+binomial_glm_df <- data.frame()
+
+
+# Iterate over each numeric column and fit the binomial GLM
+for (col in numeric_columns) {
+  # Construct the formula with the current column
+  formula <- as.formula(paste("target ~", col))
+  
+  # Fit the binomial GLM
+  model <- glm(formula, 
+               data = df[!is.na(df[,col]),c('target',col)], 
+               family = binomial(link="logit"))
+  
+  # Get the coefficient and p-value
+  coef <- coef(model)[2]  
+  p_value <- summary(model)$coefficients[2, 4]  
+  #calculate deviance reduction
+  deviance_reduction = 100*(1-(model$deviance/model$null.deviance ))
+  
+  # Append the results to the dataframe
+  binomial_glm_df <- rbind(binomial_glm_df, 
+                            data.frame(feature = col, 
+                                       coefficient = coef,
+                                       p_value = p_value, AIC = model$aic,
+                                       deviance_reduction = deviance_reduction))
+}
+
+```
+
+### 
+
+```{r}
+binomial_glm_df <- binomial_glm_df %>% 
+  mutate( p_adjust = p.adjust(p_value, method = 'bonferroni'),
+         minus_log10_padj = -log10(p_adjust+1e-300)) %>% 
+  arrange(-deviance_reduction)
+
+
+##write results to file
+write.csv(binomial_glm_df,
+          'data/logistic_regression_results.csv',
+          row.names = FALSE)
+
+dt_datatable_wrapper(binomial_glm_df)
+
+
+
+```
+
+### Plot Model attributes 
+
+```{r fig.width=15, fig.height=5}
+p1 <- ggplot(binomial_glm_df,aes(x=minus_log10_padj,
+                           y=deviance_reduction))+
+  geom_point(alpha=0.4)+
+  scale_y_continuous(breaks = seq(0, 6, 0.5))+
+  labs(x='-log10(p-adjust)', 
+       y ='Model deviance reduction %',
+       title = 'Deviance reduction vs adjusted p-value')+
+  theme(panel.grid.minor = element_blank())
+
+
+p2 <- ggplot(binomial_glm_df, aes(x = coefficient, y =deviance_reduction))+
+  geom_point(alpha=0.4)+
+  scale_y_continuous(breaks = seq(0, 6, 0.5))+
+  labs(x='Model Coefficient', 
+       y ='Model deviance reduction %',
+       title = 'Deviance reduction vs Coefficient')+
+  theme(panel.grid.minor = element_blank())
+
+p3 <- ggplot(binomial_glm_df, aes(x = AIC, y =deviance_reduction))+
+  geom_point(alpha=0.4)+
+  scale_y_continuous(breaks = seq(0, 6, 0.5))+
+  labs(x='Akaike Information Criterion', 
+       y ='Model deviance reduction %',
+       title = 'Deviance reduction vs AIC')+
+  theme(panel.grid.minor = element_blank())
+
+ggpubr::ggarrange(p1,p2,p3,nrow = 1)
+```
+
+
+
+## Plot distribution of numeric variables based on their loan repayment status
+
+To visualize the density distribution of a numeric variable, you can use the `plot_numeric_variable()` function from `helper_functions.R`. This function creates a density plot with filled areas representing the density of loan repayment status for different values of the specified numeric variable.
+
+`ext_source{1|2|3}` refers to data from unknown external sources, however they appear to all have differing distributions between repayed and defaulted loans.
+
+```{r warning=FALSE}
+for(x in binomial_glm_df$feature[1:80]){
+  plot_numeric_variable(feature = x, df=df)
+}
+
+```
+
+## Use Chi-squared to identify the most relevant categorical values
+
+The chi-squared test is used to determine the importance of categorical features in predicting loan defaults. We calculate the p-values and chi-squared statistics for each feature, which indicate the significance of the relationship between the feature and the target variable. Lower p-values and higher chi-squared statistics indicate stronger associations.
+
+Additionally, we calculate the difference in proportions of loan defaults between the highest and lowest categories within each feature. This reflects the magnitude of the impact that each feature has on loan default behaviour. The results are stored in a data frame called **`chi_sq_df`**.
+
+```{r warning=FALSE}
+# Create an empty vector to store p-values
+p_values <- c()
+chi_sq_statistic <- c()
+min_max_diff <- c()
+
+# Loop over each categorical feature
+categ_features <- filter(info, Data_Type =='factor')$Column
+categ_features <- categ_features[categ_features!='target']
+
+for(feature in categ_features){
+  ##create a sliced df for feature of intertest
+  feature_df <- df[,c('target', feature)]
+  colnames(feature_df)[colnames(feature_df)==feature] <- 'feature_x'
+  
+  # Create a contingency table 
+    contingency_table <- table(feature_df$feature_x, feature_df$target)
+
+  # Perform the chi-squared test
+  chi_squared_test <- chisq.test(contingency_table)
+  
+  ##calculate the difference in proportion of defaults between highest and lowest groups
+    category_proportions <- feature_df %>% 
+    group_by(feature_x) %>% 
+    summarise(prop_defult = target %>% as.character %>% as.numeric %>% mean, 
+              count = n()) %>% 
+    filter(count>500) #require a group to have over 500 datapoints to be counted
+  
+  diff <- max(category_proportions$prop_defult)-min(category_proportions$prop_defult)
+
+  # Store the p-value
+  p_values <- c(p_values, chi_squared_test$p.value)
+  chi_sq_statistic <- c(chi_sq_statistic, chi_squared_test$statistic)
+  min_max_diff <- c(min_max_diff, diff)
+
+}
+
+
+
+```
+
+```{r}
+# Create a data frame of features and their corresponding p-values
+chi_sq_df <- data.frame(feature = categ_features,
+                        p_adjust = p.adjust(p_values, method='BH'),
+                        chi_sq_statistic = chi_sq_statistic,
+                        min_max_diff = min_max_diff)%>% 
+  mutate(minus_log10_padj =-log10(p_adjust+1e-200)) %>% 
+  
+  arrange(p_adjust)
+
+# Print the feature importances
+dt_datatable_wrapper(chi_sq_df)
+```
+### Plot Chi-squared model results
+
+We used the chi-squared test to determine the significance of each feature and calculated the maximum difference in loan default proportions between the categories of each feature.
+
+The plot below visualizes the relationship between the maximum category difference in loan default proportions and the chi-squared statistic's -log10(p-adjust) value. The color of the points represents whether the feature will be removed or retained based on the significance level. 
+
+```{r}
+
+
+ggplot(chi_sq_df, aes(x=min_max_diff, y=minus_log10_padj))+
+  geom_point()+
+  labs(x='Maxium category difference in Loan Default Proportion', 
+       y = 'Chi-squared -log10(p-adjust)')
+
+```
+
+## Visualisation of selected categorical features
+
+The bar charts below depict the proportion of loan defaults for each category of the selected categorical features. The dotted line represents the *overall loan default rate (~8%)*. The color-coded arrows indicate the direction of the effect on default risk compared to the overall default rate. *Green arrows represent a decreased risk of default*, while *red arrows indicate an increased risk of default*. The number of datapoints in each category are annotated as n = x. 
+
+```{r fig.width=12, fig.height=6}
+
+for(x in chi_sq_df$feature){
+  plot_categorical_variable(x, df=df)
+}
+```
+
