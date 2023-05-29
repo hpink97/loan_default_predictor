@@ -11,8 +11,6 @@ This repository contains code and data for predicting loan defaulting. The goal 
 - [Model Evaluation](#model-evaluation)
 - [Usage](#usage)
 - [Results](#results)
-- [Contributing](#contributing)
-- [License](#license)
 
 ## Introduction
 
@@ -20,19 +18,21 @@ The objective of this project is to develop a predictive model that can assess t
 
 ## Data
 
-The project utilizes a dataset containing various features related to borrowers and loan applications. The dataset includes information such as borrower demographics, financial indicators, credit history, and loan characteristics. The data is obtained from [source name or link].
+The project utilizes a dataset containing various features related to borrowers and loan applications. The dataset includes information such as borrower demographics, financial indicators, credit history, and loan characteristics. The data is obtained from [Kaggle](https://www.kaggle.com/competitions/home-credit-default-risk/data)].
 
 ## Aggregation and Feature Engineering
 
-The feature engineering and aggregation steps are performed in the [`01_credit_risk_aggregate_and_merge.Rmd`](01_credit_risk_aggregate_and_merge.Rmd) file. This script combines data from multiple sources and performs preprocessing tasks such as:
+The aggregation and feature engineering steps are performed in the `01_credit_risk_eda.Rmd` file. This script combines data from multiple sources and performs preprocessing tasks such as:
 
-- Aggregating information from different datasets to create new features.
-- Handling missing values and imputing them using various strategies.
-- Scaling numeric columns to ensure feature comparability.
-- Encoding categorical variables for model compatibility.
-- Selecting relevant features based on domain knowledge and analysis.
+- Importing and cleaning the application data (`application_train.csv` and `application_test.csv`).
+- Creating additional features based on the existing data, such as income ratios and discretizing continuous features.
+- Importing and preprocessing additional datasets, such as bureau data, credit card data, installment payment data, and previous credit application data.
+- Aggregating the data at the loan applicant level (`sk_id_curr`) by calculating various statistics and ratios.
+- Handling missing values by replacing them with zeros in the aggregated columns.
 
-These steps aim to transform the raw data into a suitable format for model training and improve the predictive power of the features.
+These steps aim to transform the raw data into a merged and aggregated dataset suitable for model training and evaluation.
+
+For more details, please refer to the [`01_credit_risk_eda.Rmd`](01_credit_risk_eda.Rmd) file.
 
 ## Model Training
 
@@ -54,4 +54,6 @@ The performance of the loan default prediction model is evaluated using various 
 - Recall: The proportion of true positives predicted correctly among all actual positives.
 - Specificity: The proportion of true negatives among all negative predictions.
 - ROC AUC score: The area under the receiver operating characteristic curve, which measures the model's ability to distinguish between default and non-default cases.
--
+
+## Results
+
