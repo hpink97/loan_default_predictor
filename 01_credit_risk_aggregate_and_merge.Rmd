@@ -34,7 +34,7 @@ source('helper_functions.R')
 
 ## Import Data
 
-This dataset contains a relational schema of several tables. `application_{train|test}.csv` contains main information regarding the credit application including a primary key (`sk_id_curr`). Applications contains 1 row per `sk_id_curr`. However other available datasets require aggreagtion before merging, including; bank balances, previous credit applications, etc contain information regarding previous loans (successful and unsuccessful), credit card spending, repayment history, etc
+This dataset contains a relational schema of several tables. `application_{train|test}.csv` contains main information regarding the credit application including a primary key (`sk_id_curr`). applications_train contains 1 row per `sk_id_curr`. However other available datasets require aggreagtion before merging, including; bank balances, previous credit applications_train, etc contain information regarding previous loans (successful and unsuccessful), credit card spending, repayment history, etc
 
 ### Application data
 
@@ -43,7 +43,8 @@ Import `application_train.csv`, this is the main table which contains data regar
 Create additional features such as income ratios and discretise continuous features into binary (does applicant have children).
 
 ```{r}
-applications <- clean_read_csv('data/application_train.csv') %>%
+read_applications <- function(path){
+  df <- clean_read_csv(path) %>%
   mutate(
     #convert days_birth to age
     age = abs(days_birth)/365.25,
@@ -71,8 +72,14 @@ applications <- clean_read_csv('data/application_train.csv') %>%
     is_childless = ifelse(cnt_children == 0, 1, 0) %>% factor()
   ) %>% 
   select(-days_employed, -days_birth)
+  
+  return(df)
+    
+}
+applications_train <- read_applications('data/application_train.csv') 
+applications_test <- read_applications('data/application_test.csv')
 
-dt_datatable_wrapper(applications)
+dt_datatable_wrapper(applications_train)
 ```
 
 ### Bureau data
@@ -176,7 +183,7 @@ dt_datatable_wrapper(installments_payments)
 
 ### Previous credit application data
 
-The `previous_application.csv` dataset contains information about previous loan applications in Home Credit. It includes data such as IDs of previous credits and loans, contract details, payment amounts, application timing, flags indicating the last application per contract or day, interest rates, loan purposes, decision days, payment methods, rejection reasons, client types, goods categories, portfolio and product types, channel types, seller details, payment terms, and insurance requests. This dataset provides valuable insights into loan application patterns, client preferences, and application outcomes. It can be utilized for risk assessment, customer segmentation, and improving loan application processes.
+The `previous_application.csv` dataset contains information about previous loan applications_train in Home Credit. It includes data such as IDs of previous credits and loans, contract details, payment amounts, application timing, flags indicating the last application per contract or day, interest rates, loan purposes, decision days, payment methods, rejection reasons, client types, goods categories, portfolio and product types, channel types, seller details, payment terms, and insurance requests. This dataset provides valuable insights into loan application patterns, client preferences, and application outcomes. It can be utilized for risk assessment, customer segmentation, and improving loan application processes.
 
 ```{r}
 previous_applications <- clean_read_csv('data/previous_application.csv') %>% 
@@ -400,42 +407,42 @@ head(installments_agg, 10) %>% datatable()
 
 ```
 
-### Previous credit applications data aggregation
+### Previous credit applications_train data aggregation
 
 ```{r}
-# Count the total number of previous applications for each SK_ID_CURR
+# Count the total number of previous applications_train for each SK_ID_CURR
 total_applications <- count(previous_applications, sk_id_curr, name = 'total_num_previous_apps')
 
-# Aggregate accepted applications data
+# Aggregate accepted applications_train data
 accepted_agg <- accepted_applications %>% 
   group_by(sk_id_curr) %>% 
   summarise(
-    # Count the total number of accepted applications
+    # Count the total number of accepted applications_train
     total_accepted_apps = n(),  
     # Calculate the sum of accepted credit amounts
     total_accepted_credit = sum(amt_credit, na.rm = TRUE),  
-    # Calculate the mean downpayment rate for accepted applications
+    # Calculate the mean downpayment rate for accepted applications_train
     accepted_median_downpayment_rate = median(rate_down_payment, na.rm = TRUE),  
-    # Calculate the proportion of accepted applications with downpayment
+    # Calculate the proportion of accepted applications_train with downpayment
     accepted_prop_w_downpayment = sum(is_downpayment) / n(),  
     # Find the most recent acceptance date
     most_recent_accepted = max(days_decision, na.rm = FALSE),  
     accepted_max_days_last_due = max(days_last_due, na.rm = FALSE),  
-    # Find the maximum days to the last due date for accepted applications
+    # Find the maximum days to the last due date for accepted applications_train
     accepted_max_days_first_due = max(days_first_due, na.rm = FALSE)  
   )
 
-# Aggregate rejected applications data
+# Aggregate rejected applications_train data
 rejected_agg <- rejected_applications %>% 
   group_by(sk_id_curr) %>% 
   summarise(
-     # Count the total number of rejected applications
+     # Count the total number of rejected applications_train
     total_rejected_apps = n(), 
     # Calculate the sum of rejected credit amounts
     total_rejected_credit = sum(amt_credit, na.rm = TRUE),  
-    # Calculate the mean downpayment rate for rejected applications
+    # Calculate the mean downpayment rate for rejected applications_train
     rejected_median_downpayment_rate = median(rate_down_payment, na.rm = TRUE),  
-    # Calculate the proportion of rejected applications with downpayment
+    # Calculate the proportion of rejected applications_train with downpayment
     rejected_prop_w_downpayment = sum(is_downpayment) / n(),  
     # Find the most recent rejection date
     most_recent_rejected = max(days_decision, na.rm = FALSE)  
@@ -448,7 +455,7 @@ previous_applications_agg <- merge(total_applications, accepted_agg,
   mutate(
     # Replace NA, NaN, and infinite values with 0
     across(everything(), ~replace(., is.na(.) | is.nan(.) | is.infinite(.), 0)),
-    # Calculate the acceptance rate of previous applications
+    # Calculate the acceptance rate of previous applications_train
     accepted_rate = total_accepted_apps / total_num_previous_apps,
     # Calculate the proportion of credit rejected
     prop_credit_rejected = total_rejected_credit / 
@@ -466,24 +473,45 @@ head(previous_applications_agg,10) %>% datatable()
 ```{r}
 # Merge dataframes
 
-# Merge the 'applications' and 'previous_credits_agg' dataframes by 'sk_id_curr', keeping all rows from 'applications'
-df <- merge(applications, previous_credits_agg, by = 'sk_id_curr', all.x = TRUE) %>% 
-  merge(credit_agg, by = 'sk_id_curr', all.x = TRUE) %>% 
-  merge(installments_agg, by = 'sk_id_curr', all.x = TRUE) %>% 
-  merge(previous_applications_agg, by = 'sk_id_curr', all.x = TRUE)
+# Merge the 'applications_train' and 'previous_credits_agg' dataframes by 'sk_id_curr', keeping all rows from 'applications_train'
 
-# Replace NAs in aggregated columns with zeros. In these datasets, NA means no data
-cols2replace <- c(colnames(credit_agg), 
-                  colnames(installments_agg),
-                  colnames(previous_credits_agg), 
-                  colnames(previous_applications_agg)) %>% unique()
+merge_and_clean <- function(application_df){
+  df <- merge(application_df, 
+              previous_credits_agg,
+              by = 'sk_id_curr', all.x = TRUE) %>% 
+  merge(credit_agg, 
+        by = 'sk_id_curr', all.x = TRUE) %>% 
+  merge(installments_agg, 
+        by = 'sk_id_curr', all.x = TRUE) %>% 
+  merge(previous_applications_agg, 
+        by = 'sk_id_curr', all.x = TRUE) 
+  
+  nrow1 <- nrow(df)
+  df <- distinct(df, sk_id_curr,.keep_all = TRUE)
+  nrow2 <- nrow(df)
+  print(paste('Removed', nrow1-nrow2, 'duplicate rows'))
 
-df[, cols2replace] <- lapply(df[, cols2replace], function(x) ifelse(is.na(x), 0, x))
+  # Replace NAs in aggregated columns with zeros. 
+  #In these   datasets, NA means no data
+  cols2replace <- c(colnames(credit_agg), 
+                    colnames(installments_agg),
+                    colnames(previous_credits_agg), 
+                    colnames(previous_applications_agg)) %>%
+    unique()
 
-# Get dataset overview
-info <- get_dataset_overview(df)
+  df[, cols2replace] <- lapply(df[, cols2replace], 
+                               function(x) ifelse(is.na(x), 0, x))
+  
+  return(df)
+  
+}
 
-df %>% head(10) %>% datatable()
+df_train <- merge_and_clean(applications_train)
+df_test <- merge_and_clean(applications_test)
+
+
+
+
 
 ```
 
@@ -492,7 +520,7 @@ df %>% head(10) %>% datatable()
 
 ```{r}
 # Write the merged dataframe to a compressed .rds file
-write_rds(df, 'data/all_data_merged.rds.gz', compress = 'gz')
-write.csv(df, 'data/all_data_merged.csv', row.names = FALSE)
-
+write_rds(df_train, 'data/all_data_merged.rds.gz', compress = 'gz')
+write.csv(df_train, 'data/all_data_merged.csv', row.names = FALSE)
+write.csv(df_test, 'data/all_TEST_data_merged.csv', row.names = FALSE)
 ```
