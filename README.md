@@ -44,16 +44,28 @@ The project utilizes the XGBoost algorithm for training the loan default predict
 4. Model Training: The XGBoost classifier is trained using the selected features and specified hyperparameters.
 5. Model Evaluation: The trained model's performance is evaluated using various metrics such as F1 score, accuracy, precision, recall, specificity, and ROC AUC score.
 
-## Model Evaluation
+### Dataset class for ML preprocessing
 
-The performance of the loan default prediction model is evaluated using various evaluation metrics to assess its accuracy and effectiveness. The [`Model`](03_ml_preprocessing_and_training.ipynb) class provides methods for evaluating the model and visualizing its performance, including:
+The `Dataset` class is designed to handle the preprocessing and splitting of a dataset for machine learning tasks. Here is a summary of its functionality:
 
-- F1 score: The harmonic mean of precision and recall, which balances both metrics.
-- Accuracy: The overall accuracy of the model in predicting loan defaulting.
-- Precision: The proportion of true positives among all positive predictions.
-- Recall: The proportion of true positives predicted correctly among all actual positives.
-- Specificity: The proportion of true negatives among all negative predictions.
-- ROC AUC score: The area under the receiver operating characteristic curve, which measures the model's ability to distinguish between default and non-default cases.
+1. Initialization: The class takes in a pandas DataFrame (`df`) representing the dataset and the target variable (`target`). It also accepts additional parameters like `is_test` to indicate if the dataset is a test set, `scaler` for scaling numeric columns, and `trained_cols` for indicating specific columns to be used in the final dataset.
+
+2. Preprocessing: The `preprocess()` method performs preprocessing tasks on the dataset. It includes basic imputations for missing values, smart imputations using the `miceforest` package for remaining missing values, scaling of numeric columns, and label encoding for binary columns. It also performs one-hot encoding for categorical columns.
+
+3. Splitting Data: The `split_data()` method splits the preprocessed dataset into training, evaluation, and testing sets. It takes parameters like `test_size` and `eval_size` to control the size of the test and evaluation sets, respectively. It prints information about the sizes and positive rates of each split.
+
+
+### `Model` Class for training xgboost models
+
+The model class provides a streamlined workflow for feature selection, model training, and evaluation of xgboost models.
+
+Here is a summary of the key features and methods of the Model class:
+
+1.   **Initialisation**: The class is initialized with the necessary input data using the `Dataset` class, including the training and test sets (`X_train`, `X_test`) and their corresponding target variables (`y_train`, `y_test`).
+2.   **Feature Selection**: The `select_features()` method allows you to perform feature selection using the `sklearn.feature_selection.SelectKBest` algorithm. It selects the top num_features based on mutual information classification scores.
+3. **Model Training**: The `train_model()` method trains an XGBoost classifier using the specified xgboost_params. It uses the training data and evaluates the model's performance on the evaluation set (`X_eval`, `y_eval`). Early stopping is implemented to prevent overfitting.
+4. **Model Evaluation**: The `evaluate_model()` method calculates and prints various evaluation metrics, including F1 score, accuracy, precision, recall, specificity, ROC AUC score, and balanced accuracy. It also selects the optimal threshold for determining binary predictions based on the F1 score.
+5. **Performance Visualisation**: The class provides several plotting methods to visualise model performance, including `plot_roc_auc()` to visualize the ROC curve and calculate the AUC score, `plot_predictions()` to plot the predicted probabilities against the true labels, and `plot_feature_importance()` to display the feature importances using a bar plot.
 
 ## Results
 
