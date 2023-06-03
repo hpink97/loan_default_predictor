@@ -15,7 +15,8 @@ from sklearn.feature_selection import SelectKBest, f_classif, VarianceThreshold
 
 
 class Dataset:
-    def __init__(self, df, target,is_test=False, scaler=None, trained_cols = None):
+    def __init__(self, df, target,is_test=False,
+                 label_enocder_dict = None, scaler=None, trained_cols = None):
       input_df = df.copy()
       self.is_test = is_test
       self.target = target
@@ -27,7 +28,7 @@ class Dataset:
       self.y_test = None
       self.preprocessed = False
       self.scaler = scaler
-      self.label_encoders = None
+      self.label_encoders = label_enocder_dict
       if self.is_test:
         self.y = None
         self.X = input_df
@@ -93,15 +94,21 @@ class Dataset:
       
       # Perform label encoding for binary columns
       print('One-hot-encoding categorical vars')
-      binary_cols = [col for col in self.X.columns if self.X[col].nunique() == 2]
-      self.label_encoders = {}
-
-      # Label encode binary columns
-      for col in binary_cols:
+      if self.label_encoders is None:
+        binary_cols = [col for col in self.X.columns if self.X[col].nunique() == 2]
+        self.label_encoders = {}
+        # Label encode binary columns
+        for col in binary_cols:
           label_encoder = LabelEncoder()
           self.X[col] = label_encoder.fit_transform(self.X[col])
           # Store the label encoder for later use
           self.label_encoders[col] = label_encoder
+      ##
+      else:
+        for col in self.label_encoders.keys():
+          self.X[col] = self.label_encoders[col].transform(self.X[col])
+
+        
       
       # Perform one-hot encoding for categorical columns
       categorical_cols = [col for col in self.X.columns if self.X[col].dtype == 'object' and col not in binary_cols]
@@ -504,5 +511,4 @@ class Model:
         return y
       
       
-
 
