@@ -105,7 +105,8 @@ class Dataset:
           self.label_encoders[col] = label_encoder
       ##
       else:
-        for col in self.label_encoders.keys():
+        binary_cols = self.label_encoders.keys()
+        for col in binary_cols:
           self.X[col] = self.label_encoders[col].transform(self.X[col])
 
         

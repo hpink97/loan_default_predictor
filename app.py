@@ -1,19 +1,39 @@
 #'#'%%writefile app.py
 import streamlit as st
 import numpy as np
+import pandas as pd
 import datetime as dt
 import pickle
 import gzip
 
-from classes import *
+#import classes
+from helpers.classes import Dataset, Model
 
 
-with gzip.open('model.pkl.gz', 'rb') as f:
+##@st.cache_resource(ttl=None) #allow model caching
+def load_pickles():
+    with gzip.open('model_pickle_files/model.pkl.gz', 'rb') as f:
         model = pickle.load(f)
+    with open('model_pickle_files/scaler.pkl', 'rb') as f:
+        scaler = pickle.load(f)
+    with open('model_pickle_files/label_encoders.pkl', 'rb') as f:
+        label_encoder = pickle.load(f)
+    #return loaded objects
+    return model, scaler, label_encoder
 
+
+def safe_divide(numerator, denominator):
+    """
+    Define function on pandas series that may conatin zeros 
+    """
+    x =  np.where(denominator != 0, numerator / denominator, 0)
+    return x
 
 # Define function to calculate age group
 def calculate_age_group(age):
+    """
+    Discretise age into categories
+    """
     if age < 30:
         return 'under 30'
     elif age < 45:
@@ -52,24 +72,42 @@ def calculate_balance_statistics(feature_dict):
 
     return feature_dict
 # Define function to perform prediction
+
 def feature_dict_to_df(feature_dict):
+    feature_dict = calculate_balance_statistics(feature_dict)
+    df = pd.DataFrame(feature_dict, index=[0])
+    #use dictionarys to change categorical values to how they exist in training df
+    df['gender']=df['gender'].replace({'Male': 'M', 'Female': 'F'})
+    df['name_education_type'] =df['name_education_type'].replace({'College/University degree':'Higher education',
+                                                                    'Secondary/High School':'Secondary / secondary special'})
+    df['name_income_type']=df['name_income_type'].replace({'Salary':'Working','Divedends':'Businessman'})
+    df['reg_city_not_work_city'] = df['reg_city_not_work_city'].replace({'Yes':1, 'No':0})
+    df['age_group'] = df['age'].apply(calculate_age_group)
+    df['days_id_publish'] = df['days_id_publish'].apply(lambda x: -365.25 * x)
+    df['days_last_phone_change'] = df['yrs_last_phone_change'].apply(lambda x: -365.25 * x)
+    df['perc_adult_life_employed'] = safe_divide(df['yrs_employed'], (df['age'] - 18))
+    df['credit_income_ratio'] = safe_divide(df['credit'], df['income'])
+    df['yrs_wroking'] = (df['age'] - 18)
+    df['perc_adult_life_employed'] = safe_divide(df['yrs_employed'], df['yrs_wroking'])
+    df['prop_credit_rejected']=safe_divide(df['total_rejected_apps'],df['total_credit_apps'])
+    df['debt_to_credit_ratio']=safe_divide(df['credit_debt'],df['credit_sum'])
+    
+    return df
 
-  feature_dict = calculate_balance_statistics(feature_dict)
+def predict_default_prob(df, model, scaler, label_encoders):
+    data = Dataset(
+        df, 
+        is_test=True,
+        scaler=scaler,
+        label_enocder_dict =label_encoders,
+        target=None)
 
-  df = pd.DataFrame(feature_dict, index=[0])
-  #use dictionarys to change categorical values to how they exist in training df
-  df['gender']=df['gender'].replace({'Male': 'M', 'Female': 'F'})
-  df['name_education_type'] =df['name_education_type'].replace({'College/University degree':'Higher education',
-                                                                'Secondary/High School':'Secondary / secondary special'})
-  df['name_income_type']=df['name_income_type'].replace({'Salary':'Working','Divedends':'Businessman'})
-  df['reg_city_not_work_city'] = df['reg_city_not_work_city'].replace({'Yes':1, 'No':0})
-  df['age_group'] = df['age'].apply(calculate_age_group)
-  df['days_id_publish'] = df['days_id_publish'].apply(lambda x: -365.25 * x)
-  df['days_last_phone_change'] = df['yrs_last_phone_change'].apply(lambda x: -365.25 * x)
-  df['perc_adult_life_employed'] = (df['yrs_employed'] / (df['age'] - 18))
-  ##change days id publish from yrs to days and make negative
+    data.preprocess(final_X_cols = model.feature_names)
+    y_pred = model.predict_prob(new_dataset=data)
 
-  return df
+    return y_pred
+
+
     
   # Calculate balance statistics
   
@@ -79,6 +117,8 @@ def feature_dict_to_df(feature_dict):
 
 # Define your Streamlit app
 def run():
+    #load pickle files
+    model, scaler, label_encoder = load_pickles()
 
     # Using markdown for formatted text
     st.markdown("# Loan Default Prediction App")
@@ -122,7 +162,7 @@ def run():
                                                min_value = 1000, max_value = int(5e6), value = int(feature_dict['income']*3), 
                                                step=1000, format="%d")
     feature_dict['balance_string'] = st.sidebar.text_input("Input monthly credit card balances separated by a comma (e.g. '5000, 6000, 5500, 7000, 8000'), starting with the most recent (leave blank if not applicable)",
-                                              value='')
+                                              value='Please enter values in US$ - eg. 3500,4500,3000,2500,5000,etc..')
     feature_dict['average_days_since_credit_update'] = st.sidebar.slider('Average Days Since Credit Update (across all forms of credit)', 
                                                                          min_value=0, max_value=365, value=30, 
                                                                          step=1, format="%d" )
@@ -165,10 +205,11 @@ def run():
     # When 'Predict' is clicked, make the prediction and store it
     if st.sidebar.button("Predict"):
         df = feature_dict_to_df(feature_dict)
-        st.dataframe(df)
+        #st.dataframe(df)
+        result = predict_default_prob(df, model, scaler, label_encoder)
 
         # Display the prediction result
-        #st.success(f'The probability of default is: {result}')
+        st.success(f'The probability of default is: {result}')
         #st.markdown("## Here are your selected features:")
         #st.markdown(feature_dict)
     else:
