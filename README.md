@@ -89,7 +89,7 @@ The `Model` class provides a method `select_features(num_features)` to select th
 
 Example:
 ```python
-model.select_features(10)
+model.select_features(num_features = 50)
 ```
 
 **Training the Model**
@@ -109,7 +109,7 @@ model.train_model(xgboost_params,num_boost_round=700,early_stopping_rounds=20  )
 
 **Hyperparameter Optimization**
 
-The `Model` class provides a method `bayesian_hyperparam_optimisation(pbounds, ...)` to perform Bayesian hyperparameter optimization using the `BayesianOptimization` library. It takes the following parameters:
+The `Model` class provides a method `bayesian_hyperparam_optimisation(pbounds, ...)` to perform Bayesian hyperparameter optimization using the `BayesianOptimization` library. The method allows num_features to be defined within `pbounds`, which perform `.select_features()` during the optimisation process. It takes the following parameters:
 
 - `pbounds`: A dictionary containing hyperparameter bounds for the optimization.
 - `start_hyperparam` (optional): A dictionary containing initial hyperparameters. Defaults to None.
@@ -119,7 +119,7 @@ The `Model` class provides a method `bayesian_hyperparam_optimisation(pbounds, .
 
 Example:
 ```python
-pbounds = {'max_depth': (3, 10), 'learning_rate': (0.01, 0.1), ...}
+pbounds = {'max_depth': (3, 10), 'learning_rate': (0.01, 0.1), 'num_features':(10,100)}
 model.bayesian_hyperparam_optimisation(pbounds)
 ```
 
