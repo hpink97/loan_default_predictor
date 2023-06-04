@@ -1,72 +1,78 @@
-# Loan Default Prediction
+# Loan Default Predictor
 
-This repository contains code and data for predicting loan defaulting. The goal is to build a machine learning model that can accurately classify borrowers as either likely to default on their loans or not.
+This repository, `loan_default_predictor`, is designed to predict whether or not a loan will default. The project uses a Kaggle dataset which consists of relational tables and goes through extensive exploratory data analysis (EDA), feature aggregation, feature engineering, and machine learning modeling.
 
-## Table of Contents
+## Dataset
 
-- [Introduction](#introduction)
-- [Data](#data)
-- [Aggregation and Feature Engineering](#aggregation-and-feature-engineering)
-- [Model Training](#model-training)
-- [Model Evaluation](#model-evaluation)
-- [Usage](#usage)
-- [Results](#results)
+The data used in this project is available on Kaggle at [Home Credit Default Risk Competition](https://www.kaggle.com/competitions/home-credit-default-risk/data). The dataset contains seven relational tables:
 
-## Introduction
+1. **application_{train|test}.csv**: This is the main table, split into training (with TARGET) and testing (without TARGET) sets. Each row represents one loan in the data sample.
 
-The objective of this project is to develop a predictive model that can assess the credit risk of borrowers and predict loan defaulting. By analyzing historical loan data and utilizing machine learning techniques, we aim to build a robust model that can assist in making informed decisions regarding loan approvals and risk management.
+2. **bureau.csv**: Contains the client's previous credits provided by other financial institutions that were reported to the Credit Bureau. For every loan in our sample, there are as many rows as the number of credits the client had in the Credit Bureau before the application date.
 
-## Data
+3. **bureau_balance.csv**: Contains monthly balances of previous credits in the Credit Bureau. This table has one row for each month of history of every previous credit reported to the Credit Bureau.
 
-The project utilizes a dataset containing various features related to borrowers and loan applications. The dataset includes information such as borrower demographics, financial indicators, credit history, and loan characteristics. The data is obtained from [Kaggle](https://www.kaggle.com/competitions/home-credit-default-risk/data)].
+4. **POS_CASH_balance.csv**: Monthly balance snapshots of previous POS (point of sales) and cash loans that the applicant had with Home Credit. This table has one row for each month of history of every previous credit in Home Credit related to loans in our sample.
 
-## Aggregation and Feature Engineering
+5. **credit_card_balance.csv**: Monthly balance snapshots of previous credit cards that the applicant has with Home Credit. This table has one row for each month of history of every previous credit in Home Credit related to loans in our sample.
 
-The aggregation and feature engineering steps are performed in the `01_credit_risk_eda.Rmd` file. This script combines data from multiple sources and performs preprocessing tasks such as:
+6. **previous_application.csv**: Contains all previous applications for Home Credit loans of clients who have loans in our sample. There is one row for each previous application related to loans in our data sample.
 
-- Importing and cleaning the application data (`application_train.csv` and `application_test.csv`).
-- Creating additional features based on the existing data, such as income ratios and discretizing continuous features.
-- Importing and preprocessing additional datasets, such as bureau data, credit card data, installment payment data, and previous credit application data.
-- Aggregating the data at the loan applicant level (`sk_id_curr`) by calculating various statistics and ratios.
-- Handling missing values by replacing them with zeros in the aggregated columns.
+7. **installments_payments.csv**: Repayment history for the previously disbursed credits in Home Credit related to the loans in our sample. There is one row for every payment that was made, plus one row for each missed payment.
 
-These steps aim to transform the raw data into a merged and aggregated dataset suitable for model training and evaluation.
+## Structure
+The project is structured in the following way:
 
-For more details, please refer to the [`01_credit_risk_eda.Rmd`](01_credit_risk_eda.Rmd) file.
+1. **model_training/01_credit_risk_aggregate_and_merge.Rmd**: This file is dedicated to the initial data pre-processing, including EDA, feature aggregation, and feature engineering.
 
-## Model Training
+2. **model_training/02_credit_risk_eda_feature_selection.Rmd**: This file is dedicated to the analysis of each feature's relation to the target variable, which is whether the loan will default or not. 
 
-The project utilizes the XGBoost algorithm for training the loan default prediction model. The [`Model`](03_ml_preprocessing_and_training.ipynb) class defined in the `03_ml_preprocessing_and_training.ipynb` notebook provides a streamlined workflow for feature selection, model training, and evaluation. The steps involved in model training are as follows:
+3. **helpers/classes.py**: This file contains Python classes that have been designed to streamline the machine learning pipeline. It includes classes for data pre-processing, feature selection (`SelectKBest`), model training, hyperparameter tuning (`BayesianOptimisation`), model evaluation (via `ROC-AUC`, `F1`, etc.), and making predictions on new data.
 
-1. Preprocessing: The dataset is preprocessed to handle missing values, impute data, scale numeric columns, and encode categorical variables.
-2. Splitting Data: The preprocessed dataset is split into training, evaluation, and testing sets.
-3. Feature Selection: The model selects the top `n` features using the `SelectKBest` algorithm based on mutual information classification scores.
-4. Model Training: The XGBoost classifier is trained using the selected features and specified hyperparameters.
-5. Model Evaluation: The trained model's performance is evaluated using various metrics such as F1 score, accuracy, precision, recall, specificity, and ROC AUC score.
+4. **model_training/03_ml_preprocessing_and_training.ipynb**: This file is where the model training takes place. It utilizes the classes defined in `helpers/classes.py` to train a comprehensive model using 300 features, as well as a simplified model using the top 25 features.
 
-### Dataset class for ML preprocessing
+5. **app.py**: This is a Streamlit application that loads the pickle files of the simplified model and scaler to make predictions.
 
-The `Dataset` class is designed to handle the preprocessing and splitting of a dataset for machine learning tasks. Here is a summary of its functionality:
+## Models
 
-1. Initialization: The class takes in a pandas DataFrame (`df`) representing the dataset and the target variable (`target`). It also accepts additional parameters like `is_test` to indicate if the dataset is a test set, `scaler` for scaling numeric columns, and `trained_cols` for indicating specific columns to be used in the final dataset.
+Two models were trained in this project:
 
-2. Preprocessing: The `preprocess()` method performs preprocessing tasks on the dataset. It includes basic imputations for missing values, smart imputations using the `miceforest` package for remaining missing values, scaling of numeric columns, and label encoding for binary columns. It also performs one-hot encoding for categorical columns.
+1. **Full Model**: This comprehensive model uses 300 features and achieved a ROC-AUC score of 0.775. It utilizes features that are difficult to collect additional data for, such as those from unknown external sources. 
 
-3. Splitting Data: The `split_data()` method splits the preprocessed dataset into training, evaluation, and testing sets. It takes parameters like `test_size` and `eval_size` to control the size of the test and evaluation sets, respectively. It prints information about the sizes and positive rates of each split.
+```python
+model_full.evaluate_model()
+```
+Result:
+```
+Optimal Threshold: 0
 
+.660
+F1 Score: 0.327
+Accuracy: 0.849
+Precision: 0.255
+Recall (Sensitivity): 0.457
+Specificity (True Negative Rate): 0.883
+ROC AUC Score: 0.777
+Balanced Accuracy: 0.670
+```
 
-### `Model` Class for training xgboost models
+2. **Simplified Model**: This model is a pared-down version of the full model, utilizing only the best 25 features. These are features for which it is feasible to collect new data. The simplified model is used in the Streamlit application, as it is more scalable and applicable in a practical setting.
 
-The model class provides a streamlined workflow for feature selection, model training, and evaluation of xgboost models.
+```python
+model_simple.evaluate_model()
+```
+Result:
+```
+Optimal Threshold: 0.690
+F1 Score: 0.255
+Accuracy: 0.807
+Precision: 0.185
+Recall (Sensitivity): 0.411
+Specificity (True Negative Rate): 0.842
+ROC AUC Score: 0.702
+Balanced Accuracy: 0.626
+```
 
-Here is a summary of the key features and methods of the Model class:
+## Streamlit Application
 
-1.   **Initialisation**: The class is initialized with the necessary input data using the `Dataset` class, including the training and test sets (`X_train`, `X_test`) and their corresponding target variables (`y_train`, `y_test`).
-2.   **Feature Selection**: The `select_features()` method allows you to perform feature selection using the `sklearn.feature_selection.SelectKBest` algorithm. It selects the top num_features based on mutual information classification scores.
-3. **Model Training**: The `train_model()` method trains an XGBoost classifier using the specified xgboost_params. It uses the training data and evaluates the model's performance on the evaluation set (`X_eval`, `y_eval`). Early stopping is implemented to prevent overfitting.
-4. **Hyperparamater tuning**: The `bayesian_hyperparam_optimisation()` performs bayesian optimisation of hyperparamaters with a specified feature space.  
-5. **Model Evaluation**: The `evaluate_model()` method calculates and prints various evaluation metrics, including F1 score, accuracy, precision, recall, specificity, ROC AUC score, and balanced accuracy. It also selects the optimal threshold for determining binary predictions based on the F1 score.
-6. **Performance Visualisation**: The class provides several plotting methods to visualise model performance, including `plot_roc_auc()` to visualize the ROC curve and calculate the AUC score, `plot_predictions()` to plot the predicted probabilities against the true labels, and `plot_feature_importance()` to display the feature importances using a bar plot.
-
-## Results
-
+The Streamlit application (`app.py`) is a user-friendly tool that can load the simplified model and its associated scaler (stored as pickle files) and make predictions. This allows for practical, real-time use of the model and makes it accessible for non-technical stakeholders.
