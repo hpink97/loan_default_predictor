@@ -54,12 +54,9 @@ The `Dataset` class includes the following methods:
 An example of the Dataset class usage could look like the following:
 
 ```python
-from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
-import pandas as pd
 
 df = pd.read_csv('application_train.csv')
-dataset = Dataset(df, target='TARGET', is_test=False, label_enocder_dict=None, scaler=StandardScaler(), trained_cols=None)
+dataset = Dataset(df, target='TARGET', is_test=False)
 
 # Define the imputation dictionary
 impute_dict = {
