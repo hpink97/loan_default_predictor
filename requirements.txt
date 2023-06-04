@@ -1,8 +1,10 @@
+pip==23.1.2
 pandas==1.5.3
 numpy>=1.21.2
-scikit-learn>=0.24.2
+matplotlib==3.7.1
+scikit-learn==0.24.2
 xgboost>=1.4.2
-matplotlib>=3.4.3
 miceforest>=2.0.4
 bayesian-optimization>=1.2.0
-streamlit >=1.15.10
+streamlit==1.23.1
+statsmodels==0.14.0
