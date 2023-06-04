@@ -70,6 +70,68 @@ dataset.split_data(test_size=0.2, eval_size=0.1)
 
 This will preprocess the dataset (including filling missing values, encoding categorical variables, and scaling numerical variables) and split it into training, evaluation, and testing subsets. This dataset is now ready to be used for model training.
 
+### `Model` class
+
+The `Model` class is designed to train, optimize, and evaluate binary classifiers using the XGBoost algorithm. This class provides a high-level interface for training XGBoost models, selecting features, hyperparameter optimization, evaluating model performance, and making predictions.
+
+**Class Initialization**
+
+To initialize the `Model` class, you need to provide an instance of the `Dataset` class as an argument. The `Dataset` class should have the following attributes: `X_train`, `X_eval`, `X_test`, `y_train`, `y_eval`, and `y_test`. 
+
+Example:
+```python
+model = Model(dataset)
+```
+
+**Feature Selection**
+
+The `Model` class provides a method `select_features(num_features)` to select the best features from the dataset using the `SelectKBest` method from scikit-learn. The `num_features` parameter specifies the number of features to select. This method internally uses the `f_classif` score function to evaluate the features.
+
+Example:
+```python
+model.select_features(10)
+```
+
+**Training the Model**
+
+The `train_model` method in the `Model` class trains the XGBoost classifier model. It incorporates evaluation datasets (`X_eval` and `y_eval`) and early stopping to prevent overfitting. Evaluation datasets are used to assess the model's performance on unseen data during training. They help identify overfitting, where the model performs well on the training data but poorly on new data. Early stopping stops the training process if the model's performance on the evaluation dataset doesn't improve for a specified number of rounds (`early_stopping_rounds`). This prevents excessive tuning to the training data and improves generalization.:
+
+- `xgboost_params`: A dictionary of XGBoost parameters.
+- `print_training_evaluation` (optional): Whether to print the training evaluation. Defaults to False.
+- `num_boost_round` (optional): The number of boosting rounds or trees to build. Defaults to 700.
+- `early_stopping_rounds` (optional): Activates early stopping. Validation metric needs to improve at least once in every `early_stopping_rounds` round(s) to continue training. Defaults to 20.
+
+Example:
+```python
+xgboost_params = {'max_depth': 5, 'learning_rate': 0.1, ...}
+model.train_model(xgboost_params,num_boost_round=700,early_stopping_rounds=20  )
+```
+
+**Hyperparameter Optimization**
+
+The `Model` class provides a method `bayesian_hyperparam_optimisation(pbounds, ...)` to perform Bayesian hyperparameter optimization using the `BayesianOptimization` library. It takes the following parameters:
+
+- `pbounds`: A dictionary containing hyperparameter bounds for the optimization.
+- `start_hyperparam` (optional): A dictionary containing initial hyperparameters. Defaults to None.
+- `initial_random_search_iterations` (optional): Number of initial iterations to perform random search. Defaults to 8.
+- `bayesian_search_iterations` (optional): Number of iterations to perform Bayesian optimization. Defaults to 20.
+- `retrain_with_best_params` (optional): Whether to retrain the model with the best parameters found. Defaults to True.
+
+Example:
+```python
+pbounds = {'max_depth': (3, 10), 'learning_rate': (0.01, 0.1), ...}
+model.bayesian_hyperparam_optimisation(pbounds)
+```
+
+**Model Evaluation**
+
+The `Model` class provides several methods to evaluate the performance of the trained model:
+
+- `roc_auc()`: Calculate the ROC AUC score for the model.
+- `evaluate_model(opt_thresh_search_precision)`: Evaluate the model performance using various metrics. This method also searches for the optimal threshold for binary target classification where the F1 score is highest.
+- `plot_roc_auc()`: Plot the receiver operating characteristic (ROC) curve for the model.
+- `plot_feature_importance(n_features)`: Plot the feature importance for the model. The `n_features` parameter specifies
+
 ## Models
 
 Two models were trained in this project:
