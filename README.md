@@ -22,6 +22,9 @@ The data used in this project is available on Kaggle at [Home Credit Default Ris
 
 7. **installments_payments.csv**: Repayment history for the previously disbursed credits in Home Credit related to the loans in our sample. There is one row for every payment that was made, plus one row for each missed payment.
 
+![image](https://github.com/hpink97/loan_default_predictor/assets/64581037/0cfbbfff-3dbc-4e59-857f-66cd077358c6)
+
+
 ## Structure
 The project is structured in the following way:
 
