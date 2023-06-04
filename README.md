@@ -2,6 +2,8 @@
 
 This repository, `loan_default_predictor`, is designed to predict whether or not a loan will default. The project uses a Kaggle dataset which consists of relational tables and goes through extensive exploratory data analysis (EDA), feature aggregation, feature engineering, and machine learning modeling.
 
+**The model has also been deployed in a [Streamlit Web app](https://ml-credit-risk-bot.streamlit.app/)**
+
 ## Dataset
 
 The data used in this project is available on Kaggle at [Home Credit Default Risk Competition](https://www.kaggle.com/competitions/home-credit-default-risk/data). The dataset contains seven relational tables:
