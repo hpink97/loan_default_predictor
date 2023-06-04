@@ -44,9 +44,7 @@ model_full.evaluate_model()
 ```
 Result:
 ```
-Optimal Threshold: 0
-
-.660
+Optimal Threshold: 0.660
 F1 Score: 0.327
 Accuracy: 0.849
 Precision: 0.255
