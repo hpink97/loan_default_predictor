@@ -27,13 +27,14 @@ The project is structured in the following way:
 
 2. **model_training/02_credit_risk_eda_feature_selection.Rmd**: This file is dedicated to the analysis of each feature's relation to the target variable, which is whether the loan will default or not. 
 
-3. **helpers/classes.py**: This file contains Python classes that have been designed to streamline the machine learning pipeline. It includes classes for data pre-processing, feature selection (`SelectKBest`), model training, hyperparameter tuning (`BayesianOptimisation`), model evaluation (via `ROC-AUC`, `F1`, etc.), and making predictions on new data.
+3. **[helpers/classes.py](https://github.com/hpink97/loan_default_predictor/blob/main/helpers/classes.py)**: This file contains Python classes that have been designed to streamline the machine learning pipeline. It includes classes for data pre-processing, feature selection (`SelectKBest`), model training, hyperparameter tuning (`BayesianOptimisation`), model evaluation (via `ROC-AUC`, `F1`, etc.), and making predictions on new data.
 
 4. **model_training/03_ml_preprocessing_and_training.ipynb**: This file is where the model training takes place. It utilizes the classes defined in `helpers/classes.py` to train a comprehensive model using 300 features, as well as a simplified model using the top 25 features.
 
 5. **app.py**: This is a Streamlit application that loads the pickle files of the simplified model and scaler to make predictions.
 
 ## Custom classes
+[More info on classes](https://github.com/hpink97/loan_default_predictor/blob/main/helpers/classes.py)
 
 ### `Dataset` Class
 
