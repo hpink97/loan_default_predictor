@@ -175,4 +175,4 @@ Balanced Accuracy: 0.626
 
 The Streamlit application (`app.py`) is a user-friendly tool that can load the simplified model and its associated scaler (stored as pickle files) and make predictions. This allows for practical, real-time use of the model and makes it accessible for non-technical stakeholders. 
 
-###[Use the app deployed on Streamlit](https://ml-credit-risk-bot.streamlit.app/.
+### [Use the app deployed on Streamlit](https://ml-credit-risk-bot.streamlit.app/)
