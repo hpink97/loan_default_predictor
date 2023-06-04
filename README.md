@@ -23,15 +23,15 @@ The data used in this project is available on Kaggle at [Home Credit Default Ris
 ## Structure
 The project is structured in the following way:
 
-1. **model_training/01_credit_risk_aggregate_and_merge.Rmd**: This file is dedicated to the initial data pre-processing, including EDA, feature aggregation, and feature engineering.
+1. **[model_training/01_credit_risk_aggregate_and_merge.Rmd](https://github.com/hpink97/loan_default_predictor/blob/main/model_training/01_credit_risk_aggregate_and_merge.Rmd)**: This file is dedicated to the initial data pre-processing, including EDA, feature aggregation, and feature engineering.
 
-2. **model_training/02_credit_risk_eda_feature_selection.Rmd**: This file is dedicated to the analysis of each feature's relation to the target variable, which is whether the loan will default or not. 
+2. **[model_training/02_credit_risk_eda_feature_selection.Rmd](https://github.com/hpink97/loan_default_predictor/blob/main/model_training/02_credit_risk_eda_feature_selection.Rmd)**: This file is dedicated to the analysis of each feature's relation to the target variable, which is whether the loan will default or not. 
 
 3. **[helpers/classes.py](https://github.com/hpink97/loan_default_predictor/blob/main/helpers/classes.py)**: This file contains Python classes that have been designed to streamline the machine learning pipeline. It includes classes for data pre-processing, feature selection (`SelectKBest`), model training, hyperparameter tuning (`BayesianOptimisation`), model evaluation (via `ROC-AUC`, `F1`, etc.), and making predictions on new data.
 
-4. **model_training/03_ml_preprocessing_and_training.ipynb**: This file is where the model training takes place. It utilizes the classes defined in `helpers/classes.py` to train a comprehensive model using 300 features, as well as a simplified model using the top 25 features.
+4. **[model_training/03_ml_preprocessing_and_training.ipynb](model_training/03_ml_preprocessing_and_training.ipynb)**: This file is where the model training takes place. It utilizes the classes defined in `helpers/classes.py` to train a comprehensive model using 300 features, as well as a simplified model using the top 25 features.
 
-5. **app.py**: This is a Streamlit application that loads the pickle files of the simplified model and scaler to make predictions.
+5. **[app.py](https://github.com/hpink97/loan_default_predictor/blob/main/app.py)**: This is a Streamlit application that loads the pickle files of the simplified model and scaler to make predictions.
 
 ## Custom classes
 [More info on classes](https://github.com/hpink97/loan_default_predictor/blob/main/helpers/classes.py)
@@ -173,4 +173,6 @@ Balanced Accuracy: 0.626
 
 ## Streamlit Application
 
-The Streamlit application (`app.py`) is a user-friendly tool that can load the simplified model and its associated scaler (stored as pickle files) and make predictions. This allows for practical, real-time use of the model and makes it accessible for non-technical stakeholders.
+The Streamlit application (`app.py`) is a user-friendly tool that can load the simplified model and its associated scaler (stored as pickle files) and make predictions. This allows for practical, real-time use of the model and makes it accessible for non-technical stakeholders. 
+
+###[Use the app deployed on Streamlit](https://ml-credit-risk-bot.streamlit.app/.
