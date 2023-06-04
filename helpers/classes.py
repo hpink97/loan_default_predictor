@@ -1,22 +1,35 @@
 import pandas as pd
 import numpy as np 
-import gc #free up memory
+##import gc #free up memory
 import matplotlib.pyplot as plt
 import miceforest as mf ##forest based imputation
+import statsmodels.api as sm
 
 
 import xgboost as xgb
 from bayes_opt import BayesianOptimization
-from sklearn.metrics import f1_score, accuracy_score, precision_score, recall_score, roc_auc_score, balanced_accuracy_score,precision_recall_curve,roc_curve, auc
+from sklearn.metrics import f1_score, accuracy_score, precision_score, recall_score, roc_auc_score, balanced_accuracy_score,roc_curve
 
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.model_selection import train_test_split
 from sklearn.feature_selection import SelectKBest, f_classif, VarianceThreshold
 
 
+
 class Dataset:
+    """
+    ## `Dataset` class for ML preprocessing
+
+    The `Dataset` class is designed to handle the preprocessing and splitting of a dataset for machine learning tasks. Here is a summary of its functionality:
+
+    1. Initialization: The class takes in a pandas DataFrame (`df`) representing the dataset and the target variable (`target`). It also accepts additional parameters like `is_test` to indicate if the dataset is a test set, `scaler` for scaling numeric columns, and `trained_cols` for indicating specific columns to be used in the final dataset.
+
+    2. Preprocessing: The `preprocess()` method performs preprocessing tasks on the dataset. It includes basic imputations for missing values, smart imputations using the `miceforest` package for remaining missing values, scaling of numeric columns, and label encoding for binary columns. It also performs one-hot encoding for categorical columns.
+
+    3. Splitting Data: The `split_data()` method splits the preprocessed dataset into training, evaluation, and testing sets. It takes parameters like `test_size` and `eval_size` to control the size of the test and evaluation sets, respectively. It prints information about the sizes and positive rates of each split.
+    """
     def __init__(self, df, target,is_test=False,
-                 label_enocder_dict = None, scaler=None, trained_cols = None):
+                 label_enocder_dict = None, scaler=None):
       input_df = df.copy()
       self.is_test = is_test
       self.target = target
@@ -446,7 +459,50 @@ class Model:
       plt.legend(loc="lower right")
       plt.show()
 
-    
+    def plot_prediction_prob(self,ylim=None, figsize=(10, 4.5)):
+      if self.y_pred is None:
+        dtest = xgb.DMatrix(self.X_test.loc[:, self.feature_names])
+        """Plot a binomial regression line on a scatter plot of the data.
+
+        Parameters
+        ----------
+        ylim : tuple, optional
+            The limits of the y-axis. Defaults to None.
+        figsize : tuple, optional
+            The size of the plot. Defaults to (10, 4.5).
+
+        Returns
+        -------
+        None
+        """
+      ##how much does are predicted y probability value relate to the actual y probability 
+      x=self.y_pred
+      y= self.y_test
+
+      # Fit the binomial GLM model
+      binomial_reg = sm.GLM(y, sm.add_constant(x), family=sm.families.Binomial()).fit()
+
+      # Generate predicted values for plotting the line
+      x_pred = np.linspace(x.min(), x.max(), 100)
+      y_pred = binomial_reg.predict(sm.add_constant(x_pred))
+
+      # Plot the data points and the regression line
+      fig, ax = plt.subplots(figsize=figsize)
+      #ax.scatter(x, y, color='b', alpha=0.5, label='Data')
+      ax.plot(x_pred, y_pred, color='r', label='Regression Line')
+      ax.axhline(self.y_test.mean(), color='k', linestyle='--', label='Overall Defaulting Rate')
+
+      ##set ylim if specified
+      if ylim:
+          ax.set_ylim(ylim)
+      
+      # Add plot labels and legend
+      ax.set_title('')
+      ax.set_xlabel('XGBoost Model Predicted Default Probability')
+      ax.set_ylabel('Actual Credit Default Probability')
+      ax.legend()
+
+      plt.show()
     
     def plot_feature_importance(self, n_features =None):
       if not self.is_model_trained:
