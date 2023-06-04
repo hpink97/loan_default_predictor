@@ -33,6 +33,46 @@ The project is structured in the following way:
 
 5. **app.py**: This is a Streamlit application that loads the pickle files of the simplified model and scaler to make predictions.
 
+## Custom classes
+
+### `Dataset` Class
+
+Our `Dataset` class is a custom utility that streamlines data preprocessing, transformation, and splitting for model training, evaluation, and testing. The class is initialized with a pandas DataFrame and includes methods for imputation, scaling, encoding, and splitting the data.
+
+**Key Functionality**
+
+The `Dataset` class includes the following methods:
+
+- `__init__(self, df, target, is_test=False, label_enocder_dict = None, scaler=None, trained_cols = None)`: Initializes the `Dataset` object. The input dataframe is divided into features (`X`) and targets (`y`). If `is_test=True`, the `y` attribute is set to `None`.
+
+- `preprocess(self, impute_dict=None, final_X_cols= None, imputation_kernel_iterations = 4, imputation_kernel_ntrees = 50)`: Preprocesses the data. It performs basic imputations based on the provided `impute_dict`, decision-tree based imputations on the remaining missing data using the MissForest imputation method, scales numerical data using StandardScaler, performs label encoding for binary variables, one-hot encoding for categorical variables, and finally prunes the dataset to only include columns specified in `final_X_cols`.
+
+- `split_data(self, test_size=0.15,eval_size = 0.15, random_state=42)`: Splits the data into training, evaluation, and testing subsets. The split proportions can be adjusted with the `test_size` and `eval_size` parameters. This method can only be run after the `preprocess` method and not on a test set (`is_test=True`).
+
+**Usage**
+
+An example of the Dataset class usage could look like the following:
+
+```python
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
+import pandas as pd
+
+df = pd.read_csv('application_train.csv')
+dataset = Dataset(df, target='TARGET', is_test=False, label_enocder_dict=None, scaler=StandardScaler(), trained_cols=None)
+
+# Define the imputation dictionary
+impute_dict = {
+    'income': 'mean',...
+}
+# Preprocess the data
+dataset.preprocess(impute_dict=impute_dict)
+# Split the data
+dataset.split_data(test_size=0.2, eval_size=0.1)
+```
+
+This will preprocess the dataset (including filling missing values, encoding categorical variables, and scaling numerical variables) and split it into training, evaluation, and testing subsets. This dataset is now ready to be used for model training.
+
 ## Models
 
 Two models were trained in this project:
