@@ -1,16 +1,18 @@
-#'#'%%writefile app.py
-import streamlit as st
 import numpy as np
 import pandas as pd
 import datetime as dt
 import pickle
-import gzip
+import gzip#
+import matplotlib.pyplot as plt
+import statsmodels.api as sm
+
+import streamlit as st
 
 #import classes
 from helpers.classes import Dataset, Model
 
 
-##@st.cache_resource(ttl=None) #allow model caching
+@st.cache_resource(ttl=None) #allow model caching
 def load_pickles():
     with gzip.open('model_pickle_files/model.pkl.gz', 'rb') as f:
         model = pickle.load(f)
@@ -115,6 +117,64 @@ def predict_default_prob(df, model, scaler, label_encoders):
   #prediction = 0
   #return prediction
 
+def fit_binomial_reg(model):
+    """Fit a binomial regression model and return it."""
+    x = model.y_pred
+    y = model.y_test
+    binomial_reg = sm.GLM(y, sm.add_constant(x), family=sm.families.Binomial()).fit()
+    return binomial_reg
+
+def plot_glm_prob(binomial_reg, model, predicted_prob,  figsize=(10, 4.5)):        
+    """Generate the probability plot based on the binomial regression model."""
+
+
+    # Generate predicted values for plotting the line
+    x_pred = np.linspace(0, 1, 500)
+    y_pred = binomial_reg.predict(sm.add_constant(x_pred))
+    print(x_pred.shape)
+
+    # Find the regression line value at the predicted probability
+    #predicted_prob_reshaped = np.reshape(predicted_prob, (1, ))
+    #print(predicted_prob_reshaped.shape)
+    # Find the regression line values at the predicted probabilities
+    pred_actual_values = binomial_reg.predict(sm.add_constant(pd.Series([1, predicted_prob])))
+    print(pred_actual_values)
+    reg_line_value = pred_actual_values[1]
+    print(f"binomial_reg predicted value is {reg_line_value}")
+    y_mean= model.y_test.mean()
+    
+    # Find the x value (x_intersection) where y_pred is closest to y_mean
+    idx = (np.abs(y_pred - y_mean)).argmin()
+    x_intersection = x_pred[idx]
+
+    # Plot the data points and the regression line
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.plot(x_pred, y_pred, color='r', label='Regression Line',linewidth=1.5)
+    ax.plot([0, x_intersection], [y_mean, y_mean], color='k', linestyle='--', label='Overall Defaulting Rate',linewidth=0.9)
+    ax.plot([x_intersection, x_intersection], [0, y_mean], color='k', linestyle='--',linewidth=0.9)
+    ax.plot([predicted_prob, predicted_prob], [0, reg_line_value], color='b', linestyle='--', label='Expected Default Probability',linewidth=1.3)
+    ax.plot([0, predicted_prob], [reg_line_value, reg_line_value], color='b', linestyle='--',linewidth=1.3)
+
+    ##set ylim if specified
+    ax.set_xlim([0, max(x_pred)])
+    ax.set_ylim([0, max(y_pred)])
+
+    if reg_line_value >= y_mean:
+      fc = reg_line_value/y_mean
+      string = f"({fc:.1f}x higher risk than average)"
+    else:
+      fc = y_mean/reg_line_value
+      string =f"({fc:.1f}x lower risk than average)"
+
+
+    # Add plot labels and legend
+    ax.set_title(f"Model Predicted Default Probability: {predicted_prob*100:.1f}%\nExpected Default Probability: {reg_line_value*100:.1f}% {string}")
+    ax.set_xlabel('XGBoost Model Predicted Default Probability')
+    ax.set_ylabel('Actual Credit Default Probability')
+    ax.legend()
+
+    return fig, reg_line_value
+
 # Define your Streamlit app
 def run():
     #load pickle files
@@ -205,15 +265,34 @@ def run():
     # When 'Predict' is clicked, make the prediction and store it
     if st.sidebar.button("Predict"):
         df = feature_dict_to_df(feature_dict)
-        #st.dataframe(df)
+        # st.dataframe(df)
         result = predict_default_prob(df, model, scaler, label_encoder)
+        result = result[0]
 
         # Display the prediction result
-        st.success(f'The probability of default is: {result}')
-        #st.markdown("## Here are your selected features:")
-        #st.markdown(feature_dict)
+        st.success(f'Your model estimated probability of default is: {result*100:.1f}%')
+
+        glm = fit_binomial_reg(model)
+        fig, pred_rate = plot_glm_prob(glm, model, result)
+        st.divider()
+        st.markdown('## Model predicted probability vs Real-world default rate')
+        st.markdown((
+            "Based on your inputs, our **machine learning model has estimated your defaulting probability as "
+            f"{result*100:.1f}%** chance of defaulting. But how does this relate to real-world results? "
+            "\n\nWe have used a test set (data that our model did not have access to during training) of 46,000 "
+            "credit applications, including 3,700 which defaulted, and evaluated the ability of our model to "
+            "accurately predict defaulting. Even if our model is returns a 99.9% probability of loan defaulting, "
+            "we would still only expect that applicant to have a ~40\% default rate. However this is 5x the average" 
+            " defaulting rate in our test set. \n\n **[More info on model training and evaluation](https://github.com/hpink97/loan_default_predictor/blob/main/model_training/03_ml_preprocessing_and_training.ipynb)**"
+        ))
+        st.pyplot(fig)
+        st.markdown(
+            f'### Based on this analysis, we expect that a model predicted default probability of {result*100:.1f}% '
+            f'equates to an actual default probability of {pred_rate*100:.1f}%'
+        )
+
     else:
         st.markdown('## Enter the feature values and click "Predict" to get the default probability.')
-    
+
 if __name__=='__main__':
     run()
