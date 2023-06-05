@@ -51,7 +51,7 @@ The `Dataset` class includes the following methods:
 
 - `__init__(self, df, target, is_test=False, label_enocder_dict = None, scaler=None, trained_cols = None)`: Initializes the `Dataset` object. The input dataframe is divided into features (`X`) and targets (`y`). If `is_test=True`, the `y` attribute is set to `None`.
 
-- `preprocess(self, impute_dict=None, final_X_cols= None, imputation_kernel_iterations = 4, imputation_kernel_ntrees = 50)`: Preprocesses the data. It performs basic imputations based on the provided `impute_dict`, decision-tree based imputations on the remaining missing data using the MissForest imputation method, scales numerical data using StandardScaler, performs label encoding for binary variables, one-hot encoding for categorical variables, and finally prunes the dataset to only include columns specified in `final_X_cols`.
+- `preprocess(self, impute_dict=None, final_X_cols= None, imputation_kernel_iterations = 4, imputation_kernel_ntrees = 50)`: Preprocesses the data. It performs basic imputations based on the provided `impute_dict`, decision-tree based imputations on the remaining missing data using the `MiceForest.ImputationKernel()` imputation method, scales numerical data using StandardScaler, performs label encoding for binary variables, one-hot encoding for categorical variables, and finally prunes the dataset to only include columns specified in `final_X_cols`.
 
 - `split_data(self, test_size=0.15,eval_size = 0.15, random_state=42)`: Splits the data into training, evaluation, and testing subsets. The split proportions can be adjusted with the `test_size` and `eval_size` parameters. This method can only be run after the `preprocess` method and not on a test set (`is_test=True`).
 
